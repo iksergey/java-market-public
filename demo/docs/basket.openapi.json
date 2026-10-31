@@ -1,0 +1,285 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Basket API",
+    "version": "v0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:28182",
+      "description": "Generated server url"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Корзина",
+      "description": "Операции с корзиной покупателя"
+    }
+  ],
+  "paths": {
+    "/api/v1/cart": {
+      "post": {
+        "tags": [
+          "Корзина"
+        ],
+        "summary": "Сохранить корзину, добавить или обновить позиции по AccountName",
+        "operationId": "saveCart",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveCartCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/cart/checkout": {
+      "post": {
+        "tags": [
+          "Корзина"
+        ],
+        "summary": "Оформить корзину в заказ (публикует событие в Kafka)",
+        "operationId": "checkout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutBasketDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutBasketResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cart/{accountName}": {
+      "get": {
+        "tags": [
+          "Корзина"
+        ],
+        "summary": "Получить корзину по accountName",
+        "operationId": "getCart",
+        "parameters": [
+          {
+            "name": "accountName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Корзина"
+        ],
+        "summary": "Удалить корзину по accountName",
+        "operationId": "removeCart",
+        "parameters": [
+          {
+            "name": "accountName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SaveCartCommand": {
+        "type": "object",
+        "properties": {
+          "accountName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShoppingCartItem"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "accountName",
+          "items"
+        ]
+      },
+      "ShoppingCartItem": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "exclusiveMinimum": 0
+          },
+          "unitPrice": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "itemTitle": {
+            "type": "string"
+          },
+          "itemNote": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "itemId",
+          "unitPrice"
+        ]
+      },
+      "CheckoutAddressDto": {
+        "type": "object",
+        "properties": {
+          "street": {
+            "type": "string",
+            "minLength": 1
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "region": {
+            "type": "string",
+            "minLength": 1
+          },
+          "postalCode": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "city",
+          "postalCode",
+          "region",
+          "street"
+        ]
+      },
+      "CheckoutBasketDto": {
+        "type": "object",
+        "properties": {
+          "accountName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contact": {
+            "$ref": "#/components/schemas/CheckoutContactDto"
+          },
+          "deliveryAddress": {
+            "$ref": "#/components/schemas/CheckoutAddressDto"
+          },
+          "paymentMethod": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "CREDIT_CARD|BANK_TRANSFER"
+          }
+        },
+        "required": [
+          "accountName",
+          "contact",
+          "deliveryAddress",
+          "paymentMethod"
+        ]
+      },
+      "CheckoutContactDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "email",
+          "firstName",
+          "lastName"
+        ]
+      },
+      "CheckoutBasketResult": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          }
+        }
+      },
+      "CartResponse": {
+        "type": "object",
+        "properties": {
+          "accountName": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShoppingCartItem"
+            }
+          },
+          "totalPrice": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  }
+}

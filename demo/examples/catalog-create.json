@@ -1,0 +1,9 @@
+{
+  "name": "Демонстрационный товар",
+  "description": "Товар для проверки API",
+  "price": 1000,
+  "pictureFileName": "demo.png",
+  "brandId": "<brandId>",
+  "categoryId": "<categoryId>",
+  "availableStock": 10
+}

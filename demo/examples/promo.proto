@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+option java_package ="ru.ksergey.marketplace.promotion.grpc";
+option java_multiple_files = true;
+
+service PromoService {
+  rpc GetPromo(GetPromoRequest) returns (PromoModel);
+  rpc CreatePromo(CreatePromoRequest) returns (CreatePromoResponse);
+  rpc DeletePromo(DeletePromoRequest) returns (DeletePromoResponse);
+  rpc UpdatePromo (UpdatePromoRequest) returns (UpdatePromoResponse);
+}
+
+message GetPromoRequest {
+  string catalog_item_id =1;
+}
+
+message PromoModel {
+  string id = 1;
+  string catalog_item_id = 2;
+  string title = 3;
+  double value = 4;
+}
+
+message CreatePromoRequest {
+  string catalog_item_id = 1;
+  string title = 2;
+  double value = 3;
+}
+
+message CreatePromoResponse {
+  string id = 1;
+  bool success = 2;
+  string description = 3;
+}
+
+message DeletePromoRequest {
+  string catalog_item_id =1;
+}
+
+message DeletePromoResponse {
+  bool success = 1;
+  string description = 2;
+}
+
+message UpdatePromoRequest {
+  string id = 1;
+  string title = 2;
+  double value = 3;
+}
+
+message UpdatePromoResponse {
+  bool success = 1;
+  string description = 2;
+}

@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: marketplace
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["catalog-api:8181"]
+        labels: { app: catalog }
+      - targets: ["promotion-grpc:8193"]
+        labels: { app: promotion }

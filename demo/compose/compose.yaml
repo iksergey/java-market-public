@@ -1,0 +1,317 @@
+name: java-market-prod
+
+services:
+  catalog_db:
+    image: mongo:8.2
+    container_name: prod_catalog_db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: catalog
+      MONGO_INITDB_ROOT_PASSWORD: catalog
+    ports:
+      - "25001:27017"
+    volumes:
+      - catalog_db_prod_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  catalog_api:
+    image: iksergey/java-catalog-api:${IMAGE_TAG:-latest}
+    platform: linux/amd64
+    container_name: prod_catalog_api
+    depends_on:
+      catalog_db:
+        condition: service_healthy
+    environment:
+      SPRING_MONGODB_URI: mongodb://catalog:catalog@catalog_db:27017/catalog?authSource=admin
+      SPRING_MONGODB_DATABASE: catalog
+    ports:
+      - "28181:8181"
+    networks:
+      default:
+        aliases:
+          - catalog-api
+    restart: unless-stopped
+
+  basket_db:
+    image: postgres:18.1
+    container_name: prod_basket_db
+    environment:
+      POSTGRES_DB: basket
+      POSTGRES_USER: basket
+      POSTGRES_PASSWORD: basket
+    ports:
+      - "25002:5432"
+    volumes:
+      - basket_db_prod_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U basket -d basket"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  basket_redis:
+    image: redis:8.8
+    container_name: prod_basket_redis
+    ports:
+      - "25005:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  basket_api:
+    image: iksergey/java-basket-api:${IMAGE_TAG:-latest}
+    platform: linux/amd64
+    container_name: prod_basket_api
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema_registry:
+        condition: service_healthy
+      basket_db:
+        condition: service_healthy
+      basket_redis:
+        condition: service_healthy
+      promotion_grpc:
+        condition: service_started
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://basket_db:5432/basket
+      SPRING_DATASOURCE_USERNAME: basket
+      SPRING_DATASOURCE_PASSWORD: basket
+      SPRING_DATA_REDIS_HOST: basket_redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      PROMOTION_GRPC_ADDRESS: promotion-grpc:8183
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_KAFKA_PROPERTIES_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+    ports:
+      - "28182:8182"
+    networks:
+      default:
+        aliases:
+          - basket-api
+    restart: unless-stopped
+
+  promotion_db:
+    image: mysql:9.7
+    container_name: prod_promotion_db
+    environment:
+      MYSQL_DATABASE: promotion
+      MYSQL_USER: promotion
+      MYSQL_PASSWORD: promotion
+      MYSQL_ROOT_PASSWORD: promotion
+    ports:
+      - "25004:3306"
+    volumes:
+      - promotion_db_prod_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-upromotion", "-ppromotion"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  promotion_grpc:
+    image: iksergey/java-promotion-grpc:${IMAGE_TAG:-latest}
+    platform: linux/amd64
+    container_name: prod_promotion_grpc
+    depends_on:
+      promotion_db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://promotion_db:3306/promotion
+      SPRING_DATASOURCE_USERNAME: promotion
+      SPRING_DATASOURCE_PASSWORD: promotion
+    ports:
+      - "28183:8183"
+      - "28193:8193"
+    networks:
+      default:
+        aliases:
+          - promotion-grpc
+    restart: unless-stopped
+
+  checkout_db:
+    image: postgres:18.1
+    container_name: prod_checkout_db
+    environment:
+      POSTGRES_DB: checkout
+      POSTGRES_USER: checkout
+      POSTGRES_PASSWORD: checkout
+    ports:
+      - "25003:5432"
+    volumes:
+      - checkout_db_prod_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U checkout -d checkout"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  checkout_api:
+    image: iksergey/java-checkout-api:${IMAGE_TAG:-latest}
+    platform: linux/amd64
+    container_name: prod_checkout_api
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema_registry:
+        condition: service_healthy
+      checkout_db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://checkout_db:5432/checkout
+      SPRING_DATASOURCE_USERNAME: checkout
+      SPRING_DATASOURCE_PASSWORD: checkout
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_KAFKA_PROPERTIES_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+    ports:
+      - "28184:8184"
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:4.3.1
+    container_name: prod_kafka
+    ports:
+      - "25010:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: CONTROLLER://0.0.0.0:9093,INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:25010
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafka_prod_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+
+  schema_registry:
+    image: confluentinc/cp-schema-registry:8.3.2
+    container_name: prod_schema_registry
+    ports:
+      - "25011:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema_registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    networks:
+      default:
+        aliases:
+          - schema-registry
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /subjects HTTP/1.0\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+
+  kafka_ui:
+    image: ghcr.io/kafbat/kafka-ui:v1.5.0
+    container_name: prod_kafka_ui
+    ports:
+      - "25012:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: prod
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+      DYNAMIC_CONFIG_ENABLED: "true"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    container_name: prod_prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./prometheus/prometheus-prod.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_prod_data:/prometheus
+    ports:
+      - "25030:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.2
+    container_name: prod_grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_prod_data:/var/lib/grafana
+    ports:
+      - "25031:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  k6_catalog:
+    image: grafana/k6:2.3.0
+    container_name: prod_k6_catalog
+    profiles: ["load"]
+    volumes:
+      - ./k6:/scripts:ro
+    environment:
+      BASE_URL: http://catalog-api:8181
+    depends_on:
+      - catalog_api
+    command: ["run", "/scripts/catalog-load.js"]
+
+  k6_cart:
+    image: grafana/k6:2.3.0
+    container_name: prod_k6_cart
+    profiles: ["load"]
+    volumes:
+      - ./k6:/scripts:ro
+    environment:
+      BASKET_URL: http://basket-api:8182
+    depends_on:
+      - basket_api
+    command: ["run", "/scripts/cart-save.js"]
+
+  portainer:
+    image: portainer/portainer-ce:2.45.1
+    container_name: prod_portainer
+    command:
+      - --admin-password=$$2y$$05$$laeO927pgzuEG/STELcRsezIhTPnWOwsV0VjcoH8P27eEhyhpJ8qi
+    ports:
+      - "25040:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_prod_data:/data
+    restart: unless-stopped
+
+volumes:
+  catalog_db_prod_data:
+  basket_db_prod_data:
+  promotion_db_prod_data:
+  checkout_db_prod_data:
+  kafka_prod_data:
+  prometheus_prod_data:
+  grafana_prod_data:
+  portainer_prod_data:

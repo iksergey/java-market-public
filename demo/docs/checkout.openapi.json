@@ -1,0 +1,310 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Checkout API",
+    "version": "v0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:28184",
+      "description": "Generated server url"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Заказы",
+      "description": "Операции с заказами покупателя"
+    }
+  ],
+  "paths": {
+    "/api/v1/orders": {
+      "post": {
+        "tags": [
+          "Заказы"
+        ],
+        "summary": "Создать заказ",
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateOrderResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{accountName}": {
+      "get": {
+        "tags": [
+          "Заказы"
+        ],
+        "summary": "Заказы по имени аккаунта",
+        "operationId": "getByAccountName",
+        "parameters": [
+          {
+            "name": "accountName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrderDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{id}": {
+      "delete": {
+        "tags": [
+          "Заказы"
+        ],
+        "summary": "Удалить заказ",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddressDto": {
+        "type": "object",
+        "properties": {
+          "street": {
+            "type": "string",
+            "minLength": 1
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "region": {
+            "type": "string",
+            "minLength": 1
+          },
+          "postalCode": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "city",
+          "postalCode",
+          "region",
+          "street"
+        ]
+      },
+      "CardDetailsDto": {
+        "type": "object",
+        "properties": {
+          "cardName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cardNumber": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expiration": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cvv": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "cardName",
+          "cardNumber",
+          "cvv",
+          "expiration"
+        ]
+      },
+      "ContactDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "email",
+          "firstName",
+          "lastName"
+        ]
+      },
+      "CreateOrderDto": {
+        "type": "object",
+        "properties": {
+          "accountName": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 5,
+            "pattern": "^[a-zA-Z0-9_@.-]+$"
+          },
+          "contact": {
+            "$ref": "#/components/schemas/ContactDto"
+          },
+          "deliveryAddress": {
+            "$ref": "#/components/schemas/AddressDto"
+          },
+          "paymentMethod": {
+            "type": "string",
+            "enum": [
+              "CREDIT_CARD",
+              "BANK_TRANSFER"
+            ]
+          },
+          "cardDetails": {
+            "$ref": "#/components/schemas/CardDetailsDto"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemDto"
+            },
+            "minItems": 1
+          },
+          "cardDetailsConsistentWithPaymentMethod": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accountName",
+          "contact",
+          "deliveryAddress",
+          "items",
+          "paymentMethod"
+        ]
+      },
+      "OrderItemDto": {
+        "type": "object",
+        "properties": {
+          "catalogItemName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "exclusiveMinimum": 0
+          },
+          "unitPrice": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "catalogItemName",
+          "unitPrice"
+        ]
+      },
+      "CreateOrderResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "OrderDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountName": {
+            "type": "string"
+          },
+          "totalAmount": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          },
+          "contact": {
+            "$ref": "#/components/schemas/ContactDto"
+          },
+          "deliveryAddress": {
+            "$ref": "#/components/schemas/AddressDto"
+          },
+          "paymentMethod": {
+            "type": "string"
+          },
+          "paymentStatus": {
+            "type": "string"
+          },
+          "maskedCardNumber": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemDto"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}
